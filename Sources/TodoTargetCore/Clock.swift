@@ -10,7 +10,7 @@ public struct SystemClock: Clock {
 
     public var now: Date {
         if let s = ProcessInfo.processInfo.environment["TODO_TARGET_TODAY"], let key = DayKey(string: s) {
-            let cal = Calendar.current
+            let cal = Calendar.autoupdatingCurrent
             if let noon = cal.date(bySettingHour: 12, minute: 0, second: 0, of: key.date(calendar: cal)) {
                 return noon
             }

@@ -20,7 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model = AppModel(store: DataStore(directory: DataStore.defaultDirectory()),
-                         clock: SystemClock(), calendar: .current)
+                         clock: SystemClock(), calendar: .autoupdatingCurrent)
         backup = BackupCoordinator(model: model)
         model.onChange = { [weak self] in self?.backup.scheduleBackup() }
         popover.behavior = .transient
@@ -94,6 +94,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forName: .NSCalendarDayChanged, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.dayMayHaveChanged() }
         }
+        // A new time zone or a changed clock moves "today" and the next midnight.
+        for name in [Notification.Name.NSSystemTimeZoneDidChange, .NSSystemClockDidChange] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.dayMayHaveChanged() }
+            }
+        }
         scheduleMidnightTimer()
     }
 
@@ -104,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func scheduleMidnightTimer() {
         midnightTimer?.invalidate()
-        let fire = DayRollover.nextMidnight(after: Date(), calendar: .current)
+        let fire = DayRollover.nextMidnight(after: Date(), calendar: .autoupdatingCurrent)
         let timer = Timer(fire: fire, interval: 0, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.dayMayHaveChanged() }
         }
