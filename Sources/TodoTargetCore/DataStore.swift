@@ -28,22 +28,24 @@ public final class DataStore {
         public var data: AppData
         /// Non-nil when `data.json` was unreadable or invalid and was moved aside.
         public var quarantinedFile: URL?
+        /// True whenever `data.json` existed but was unreadable or invalid, even if it could not be moved aside.
+        public var damageFound: Bool
     }
 
     public func load() -> AppData { loadReport().data }
 
     public func loadReport() -> LoadResult {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            return LoadResult(data: .pristine(), quarantinedFile: nil)
+            return LoadResult(data: .pristine(), quarantinedFile: nil, damageFound: false)
         }
         guard let bytes = try? Data(contentsOf: fileURL),
               let probe = try? JSONDecoder().decode(VersionProbe.self, from: bytes),
               probe.schemaVersion == AppData.currentSchemaVersion,
               let data = try? JSONDecoder().decode(AppData.self, from: bytes),
               data.isValid else {
-            return LoadResult(data: .pristine(), quarantinedFile: quarantine())
+            return LoadResult(data: .pristine(), quarantinedFile: quarantine(), damageFound: true)
         }
-        return LoadResult(data: data, quarantinedFile: nil)
+        return LoadResult(data: data, quarantinedFile: nil, damageFound: false)
     }
 
     public func save(_ data: AppData) throws {

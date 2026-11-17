@@ -147,7 +147,7 @@ final class BackupCoordinator: ObservableObject {
         if plan == .offerRestore {
             a.messageText = "A backup exists for this account"
             a.informativeText = model.recoveredFromDamage
-                ? "The data file on this Mac was damaged and moved aside, so this Mac may be missing data. Restore the backup, or keep what is on this Mac and replace the backup."
+                ? "The data file on this Mac was damaged, so this Mac may be missing data. Restore the backup, or keep what is on this Mac and replace the backup."
                 : "This Mac has no goals or history yet. Restore the backup to this Mac."
             a.addButton(withTitle: "Restore the backup")
             if !model.data.isPristine { a.addButton(withTitle: "Keep this Mac's data and replace the backup") }

@@ -13,6 +13,8 @@ final class AppModel: ObservableObject {
     /// Name of the file `data.json` was moved to when it was damaged at start.
     /// While set, local data is not trusted: it must never replace a backup unasked.
     @Published private(set) var recoveredFile: String?
+    /// True while local data came from a damaged `data.json`, even if the file could not be moved aside.
+    @Published private(set) var recoveredFromDamage: Bool
     /// Full path of the moved-aside file (for the one-time alert).
     let recoveredFileURL: URL?
 
@@ -30,13 +32,15 @@ final class AppModel: ObservableObject {
         self.data = report.data
         self.recoveredFileURL = report.quarantinedFile
         self.recoveredFile = report.quarantinedFile?.lastPathComponent
+        self.recoveredFromDamage = report.damageFound
         self.today = tracker.today
     }
 
-    var recoveredFromDamage: Bool { recoveredFile != nil }
-
     /// The user chose what to do about the damaged file (restore, or keep this Mac's data).
-    func clearRecoveryFlag() { recoveredFile = nil }
+    func clearRecoveryFlag() {
+        recoveredFile = nil
+        recoveredFromDamage = false
+    }
 
     var streak: StreakState { StreakEngine.evaluate(data: data, today: today, calendar: calendar) }
 

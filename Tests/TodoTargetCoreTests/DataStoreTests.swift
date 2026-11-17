@@ -110,3 +110,26 @@ private func expectQuarantined(_ bad: AppData) throws {
     var schema0 = AppData.pristine(); schema0.schemaVersion = 0
     try expectQuarantined(schema0)
 }
+
+@Test func damageIsReportedEvenWhenTheFileCannotBeMovedAside() throws {
+    let dir = tempDir()
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let bad = Data("{not json".utf8)
+    try bad.write(to: dir.appendingPathComponent("data.json"))
+    try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: dir.path)   // read-only folder
+    defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path) }
+    let report = DataStore(directory: dir, now: fixedNow).loadReport()
+    #expect(report.data.isPristine)
+    #expect(report.damageFound)                       // still reported
+    #expect(report.quarantinedFile == nil)            // but the file could not be moved
+    #expect((try? Data(contentsOf: dir.appendingPathComponent("data.json"))) == bad)   // and it is still there
+}
+
+@Test func damageFoundIsFalseForGoodMissingAndTrueForQuarantined() throws {
+    let dir = tempDir()
+    #expect(DataStore(directory: dir, now: fixedNow).loadReport().damageFound == false)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try Data("x".utf8).write(to: dir.appendingPathComponent("data.json"))
+    let r = DataStore(directory: dir, now: fixedNow).loadReport()
+    #expect(r.damageFound); #expect(r.quarantinedFile != nil)
+}
