@@ -6,12 +6,13 @@ import TodoTargetCore
 struct PanelActions {
     var openSettings: () -> Void = {}
     var importList: () -> Void = {}
-    var backupNow: (() -> Void)? = nil   // nil disables the menu line (backup arrives in a later task)
+    var backupNow: (() -> Void)? = nil   // nil disables the menu line
     var quit: () -> Void = { MainActor.assumeIsolated { NSApp.terminate(nil) } }
 }
 
 struct PanelView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var backup: BackupCoordinator
     let actions: PanelActions
 
     private var streak: StreakState { model.streak }
@@ -139,6 +140,8 @@ struct PanelView: View {
         HStack {
             if let err = model.saveError {
                 Text(err).font(.caption).foregroundStyle(.secondary)
+            } else if !backup.status.isEmpty {
+                Text(backup.status).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             Menu("Menu") {

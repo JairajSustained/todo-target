@@ -21,6 +21,8 @@ extension CSVImportError {
 
 struct SettingsView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var backup: BackupCoordinator
+    @State private var email = ""
     @State private var drafts: [UUID: String] = [:]
     @State private var keepPosition = false
     @State private var loginError: String?
@@ -40,6 +42,18 @@ struct SettingsView: View {
                 if let loginError {
                     Text(loginError).font(.callout).foregroundStyle(.secondary)
                 }
+            }
+            Section("Backup (optional)") {
+                TextField("Supabase URL", text: settingBinding(\.supabaseURL))
+                TextField("Supabase anon key", text: settingBinding(\.supabaseAnonKey))
+                TextField("Email", text: $email)
+                HStack {
+                    Button("Send sign-in link") { Task { await backup.sendSignInLink(email: email) } }
+                    Button("Backup now") { Task { await backup.backupNow() } }.disabled(!backup.signedIn)
+                    Button("Restore from backup") { Task { await backup.restore() } }.disabled(!backup.signedIn)
+                }
+                Text(backup.status.isEmpty ? "Backup is off until you enter a URL and key." : backup.status)
+                    .font(.callout).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -61,6 +75,14 @@ struct SettingsView: View {
             Button { move(index, by: 1) } label: { Image(systemName: "arrow.down") }
                 .disabled(index == model.data.goals.count - 1).help("Move down")
         }
+    }
+
+    private func settingBinding(_ key: WritableKeyPath<TodoTargetCore.Settings, String?>) -> Binding<String> {
+        Binding(get: { model.data.settings[keyPath: key] ?? "" },
+                set: { v in
+                    model.updateSettings { $0[keyPath: key] = v.isEmpty ? nil : v }
+                    backup.refreshState()
+                })
     }
 
     private func displayName(_ id: UUID) -> String {
