@@ -55,9 +55,9 @@ private func undo(_ data: inout AppData, _ slot: Int, _ forDay: String, today: S
 
 @Test func catchUpOnlyForOwedGoalAndOnlyYesterday() throws {
     var own = full("2026-11-06", "2026-11-15"); own["2026-11-16"] = [0]
+    own.removeValue(forKey: "2026-11-14")  // an open day two days before today
     var d = Fixtures.make(own: own, firstUse: "2026-11-06")
-    #expect(throws: ActionError.notAllowed) { try mark(&d, 1, "2026-11-15", today: "2026-11-17") }
-    #expect(throws: ActionError.notAllowed) { try mark(&d, 0, "2026-11-16", today: "2026-11-17") }
+    #expect(throws: ActionError.notAllowed) { try mark(&d, 1, "2026-11-14", today: "2026-11-17") }
     var noStreak = Fixtures.make(firstUse: "2026-11-16")
     #expect(throws: ActionError.notAllowed) { try mark(&noStreak, 1, "2026-11-16", today: "2026-11-17") }
     try mark(&d, 1, "2026-11-16", today: "2026-11-17")
@@ -89,4 +89,21 @@ private func undo(_ data: inout AppData, _ slot: Int, _ forDay: String, today: S
     d.goals[0].id = ids[0]
     try mark(&d, 0, "2026-11-17", today: "2026-11-17")
     #expect(d.firstUseDay == "2026-11-17")
+}
+
+@Test func repeatMarkOnRecoveredCatchUpGoalIsNoOp() throws {
+    var own = full("2026-11-06", "2026-11-15"); own["2026-11-16"] = [0]
+    var d = Fixtures.make(own: own, firstUse: "2026-11-06", lists: [1: items(3)])
+    try mark(&d, 1, "2026-11-16", today: "2026-11-17")
+    let after = d
+    try mark(&d, 1, "2026-11-16", today: "2026-11-17")
+    #expect(d == after)
+}
+
+@Test func repeatMarkOnGoalDoneOwnYesterdayIsNoOp() throws {
+    var own = full("2026-11-06", "2026-11-15"); own["2026-11-16"] = [0]
+    var d = Fixtures.make(own: own, firstUse: "2026-11-06")
+    let before = d
+    try mark(&d, 0, "2026-11-16", today: "2026-11-17")
+    #expect(d == before)
 }

@@ -12,15 +12,16 @@ public enum Actions {
                                 today: DayKey, calendar: Calendar) throws {
         guard let gi = data.goals.firstIndex(where: { $0.id == goalID }) else { throw ActionError.unknownGoal }
 
+        // C5: a repeat mark is a silent no-op. This check runs before the permission check.
+        let key = goalID.uuidString
+        if data.days[forDay.string]?.completions[key] != nil { return }
+
         var allowed = forDay == today
         if !allowed, forDay == today.adding(days: -1, calendar: calendar) {
             let state = StreakEngine.evaluate(data: data, today: today, calendar: calendar)
             if let cu = state.catchUp, cu.day == forDay, cu.owedGoalIDs.contains(goalID) { allowed = true }
         }
         guard allowed else { throw ActionError.notAllowed }
-
-        let key = goalID.uuidString
-        if data.days[forDay.string]?.completions[key] != nil { return }
 
         let goal = data.goals[gi]
         let index: Int? = goal.position < goal.items.count ? goal.position : nil

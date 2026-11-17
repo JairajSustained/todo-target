@@ -281,7 +281,7 @@ Also create `examples/sample-list.csv` with a header and 6 rows under 2 groups, 
   - `struct HeatmapModel: Equatable { var columns: [[HeatmapCell?]] /* weeks, 7 rows each, nil = padding */; var monthLabels: [(column: Int, name: String)]; var activeDays: Int; var maxStreak: Int; var availableYears: [Int] }` (declare `Equatable` by hand, or compare fields in tests)
   - `static func build(data: AppData, today: DayKey, period: HeatmapPeriod, calendar: Calendar, locale: Locale) -> HeatmapModel`
 
-**Rules.** `.current` spans the week containing `today - 364 days` through the week containing `today`. `.year(y)` spans the weeks covering 1 Jan to 31 Dec of `y`. The first weekday is `calendar.firstWeekday`. A day's level is the number of completions linked to that day (0 to 3). A day before `firstUseDay` is `.beforeStart`. A day after `today` is `.future`. `savedByCatchUp` is true for a day that is in `activeDays` and has recovered completions. Tooltip format is `"Mon 10 Nov 2026: 3 of 3"` and for a saved day `"... 3 of 3 (saved by catch-up)"`. `activeDays` counts counted days inside the period. `maxStreak` is `StreakState.best`. `availableYears` lists years that have data, newest first.
+**Rules.** `.current` spans the week containing `today - 364 days` through the week containing `today`. `.year(y)` spans the weeks covering 1 Jan to 31 Dec of `y`. The first weekday is `calendar.firstWeekday`. A day's level is the number of completions linked to that day (0 to 3). A day before `firstUseDay` is `.beforeStart`. A day after `today` is `.future`. `savedByCatchUp` is true for a day that is in `activeDays` and has recovered completions. Tooltip format is `"Tue 10 Nov 2026: 3 of 3"` and for a saved day `"... 3 of 3 (saved by catch-up)"`. `activeDays` counts counted days inside the period. `maxStreak` is `StreakState.best`. `availableYears` lists years that have data, newest first.
 
 - [ ] **Step 1: Write failing tests** (Gregorian UTC calendar with `firstWeekday = 1`, locale `en_US_POSIX`):
 ```swift
@@ -289,7 +289,7 @@ Also create `examples/sample-list.csv` with a header and 6 rows under 2 groups, 
 @Test func todayIsInLastColumnAndOutlined()   // last column contains a cell with isToday == true and day == today
 @Test func daysBeforeFirstUseAreGreyAndFutureEmpty()
 @Test func levelEqualsCompletionCount()       // own {0,1} -> .day(level: 2)
-@Test func tooltipFormat()                    // "Mon 10 Nov 2026: 3 of 3" for 2026-11-10 with own {0,1,2}
+@Test func tooltipFormat()                    // "Tue 10 Nov 2026: 3 of 3" for 2026-11-10 with own {0,1,2}
 @Test func savedDayIsMarkedAndTooltipSaysSo()
 @Test func monthLabelsStartAtMonthBoundaries()
 @Test func yearPeriodCoversJanToDec()         // .year(2025): first real cell is 2025-01-01, last is 2025-12-31
