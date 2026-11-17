@@ -93,7 +93,11 @@ final class AppModel: ObservableObject {
         commit(copy)
     }
 
-    func replaceData(_ new: AppData) { commit(new) }
+    /// Ignores data that fails validation (3 goals, unique IDs, positions in range).
+    func replaceData(_ new: AppData) {
+        guard new.isValid else { return }
+        commit(new)
+    }
 
     private func commit(_ new: AppData) {
         guard new != data else { return }

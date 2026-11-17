@@ -13,15 +13,12 @@ public enum Planner {
     public static func owedTasks(data: AppData, today: DayKey, calendar: Calendar) -> [OwedTask] {
         let state = StreakEngine.evaluate(data: data, today: today, calendar: calendar)
         var tasks: [OwedTask] = []
-        var taken: [UUID: Int] = [:]
 
         func add(_ i: Int, forDay: DayKey, isCatchUp: Bool) {
             let g = data.goals[i]
-            let k = taken[g.id, default: 0]
-            taken[g.id] = k + 1
-            let idx = min(max(g.position, 0), g.items.count) + k
-            let item = idx < g.items.count ? g.items[idx] : nil
-            tasks.append(OwedTask(goalID: g.id, slot: i, forDay: forDay, isCatchUp: isCatchUp, item: item))
+            let idx = Actions.rowItemIndex(data, goalIndex: i, forDay: forDay, today: today, state: state)
+            tasks.append(OwedTask(goalID: g.id, slot: i, forDay: forDay, isCatchUp: isCatchUp,
+                                  item: idx.map { g.items[$0] }))
         }
 
         if let cu = state.catchUp {

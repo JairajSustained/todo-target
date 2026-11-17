@@ -112,17 +112,27 @@ struct PanelView: View {
         }
     }
 
+    private func undoCheck(_ row: RowModel) -> UndoCheck {
+        Actions.canUndo(model.data, goalID: row.goal.id, forDay: row.forDay, today: model.today, calendar: model.calendar)
+    }
+
     private func goalRow(_ row: RowModel) -> some View {
         HStack(spacing: 10) {
             Text("\(row.slot + 1)").font(.callout.monospacedDigit()).foregroundStyle(.secondary).frame(width: 14)
             VStack(alignment: .leading, spacing: 1) {
                 Text(row.goal.name).font(.body.weight(.medium))
                 if let line = row.detail { Text(line).font(.callout).foregroundStyle(.secondary).lineLimit(1) }
+                if case .refused(let why) = undoCheck(row), row.completion != nil {
+                    Text("Undo not available: \(why)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
             Spacer()
             if row.completion != nil {
+                let check = undoCheck(row)
                 Button("Undo") { model.undo(goalID: row.goal.id, forDay: row.forDay) }
                     .buttonStyle(.link)
+                    .disabled(check != .allowed)
+                    .help(check == .allowed ? "Undo this mark" : { if case .refused(let w) = check { return w } else { return "" } }())
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).imageScale(.large)
             } else {
                 Button {
