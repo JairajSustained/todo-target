@@ -1,1 +1,7 @@
-// Menu bar app entry point (filled in Task 10).
+import AppKit
+
+let app = NSApplication.shared
+app.setActivationPolicy(.accessory)
+let delegate = AppDelegate()
+app.delegate = delegate
+app.run()
