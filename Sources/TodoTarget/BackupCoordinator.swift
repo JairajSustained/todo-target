@@ -16,6 +16,8 @@ final class BackupCoordinator: ObservableObject {
     private var debounce: Task<Void, Never>?
     /// True once the first-sync check (pull, compare) passed in this session.
     private var synced = false
+    /// A sign-in callback is accepted only after the user asked for a link (15 minutes).
+    private var pendingSignIn = PendingSignIn()
 
     private static let lastSyncedKey = "lastBackupSavedAt"
     /// `savedAt` of the last backup this Mac wrote or restored.
@@ -59,6 +61,7 @@ final class BackupCoordinator: ObservableObject {
             tokens.clear()
             synced = false
             lastSyncedAt = nil
+            pendingSignIn.cancel()
             status = ""
         }
         model.updateSettings {
@@ -183,6 +186,7 @@ final class BackupCoordinator: ObservableObject {
         guard !trimmed.isEmpty else { status = "Enter your email first"; return }
         do {
             try await c.sendMagicLink(email: trimmed, redirectTo: Self.redirectURL)
+            pendingSignIn.begin(now: Date())
             status = "Sign-in link sent. Open it on this Mac."
         } catch {
             status = "Could not send the link: \(Self.describe(error))"
@@ -191,6 +195,9 @@ final class BackupCoordinator: ObservableObject {
 
     /// The redirect from the email link arrives here.
     func handleCallback(_ url: URL) {
+        // Ignore any link that arrives when no sign-in link was requested (or it timed out).
+        guard pendingSignIn.accepts(url, now: Date()) else { return }
+        pendingSignIn.cancel()
         guard let c = client() else { status = "Enter the Supabase URL and anon key first"; return }
         do {
             try c.completeSignIn(callback: url)
