@@ -86,3 +86,27 @@ private func corruptFiles(in dir: URL) -> [URL] {
     try store.save(AppData.pristine())
     #expect(store.loadReport().quarantinedFile == nil)
 }
+
+private func expectQuarantined(_ bad: AppData) throws {
+    let dir = tempDir()
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let bytes = try JSONEncoder().encode(bad)
+    try bytes.write(to: dir.appendingPathComponent("data.json"))
+    let report = DataStore(directory: dir, now: fixedNow).loadReport()
+    #expect(report.data.isPristine)
+    #expect(report.quarantinedFile != nil)
+    #expect(report.quarantinedFile.flatMap { try? Data(contentsOf: $0) } == bytes)
+}
+
+@Test func structurallyInvalidDataIsQuarantined() throws {
+    var twoGoals = AppData.pristine(); twoGoals.goals.removeLast()
+    try expectQuarantined(twoGoals)
+    var dupes = AppData.pristine(); dupes.goals[2].id = dupes.goals[0].id
+    try expectQuarantined(dupes)
+    var badPosition = AppData.pristine(); badPosition.goals[1].position = 7
+    try expectQuarantined(badPosition)
+    var negative = AppData.pristine(); negative.goals[1].position = -2
+    try expectQuarantined(negative)
+    var schema0 = AppData.pristine(); schema0.schemaVersion = 0
+    try expectQuarantined(schema0)
+}

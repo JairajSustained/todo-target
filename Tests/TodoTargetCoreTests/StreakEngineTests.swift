@@ -84,3 +84,13 @@ private func eval(_ data: AppData, today: String, calendar: Calendar = utc) -> S
     let s = eval(data, today: "2026-03-10", calendar: ny)
     #expect(s.current == 5)
 }
+
+@Test func wrongGoalCountIsNeverEverythingDone() {
+    var none = Fixtures.make(own: full("2026-11-06", "2026-11-16"), firstUse: "2026-11-06")
+    none.goals = []
+    #expect(eval(none, today: "2026-11-17").current == 0)
+    var two = Fixtures.make(own: full("2026-11-06", "2026-11-16"), firstUse: "2026-11-06")
+    two.goals.removeLast()
+    let s = eval(two, today: "2026-11-17")
+    #expect(s.current == 0); #expect(s.best == 0); #expect(s.activeDays.isEmpty)
+}

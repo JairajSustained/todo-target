@@ -38,8 +38,9 @@ public final class DataStore {
         }
         guard let bytes = try? Data(contentsOf: fileURL),
               let probe = try? JSONDecoder().decode(VersionProbe.self, from: bytes),
-              probe.schemaVersion <= 1,
-              let data = try? JSONDecoder().decode(AppData.self, from: bytes) else {
+              probe.schemaVersion == AppData.currentSchemaVersion,
+              let data = try? JSONDecoder().decode(AppData.self, from: bytes),
+              data.isValid else {
             return LoadResult(data: .pristine(), quarantinedFile: quarantine())
         }
         return LoadResult(data: data, quarantinedFile: nil)

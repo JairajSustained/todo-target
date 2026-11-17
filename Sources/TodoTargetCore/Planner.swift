@@ -19,7 +19,7 @@ public enum Planner {
             let g = data.goals[i]
             let k = taken[g.id, default: 0]
             taken[g.id] = k + 1
-            let idx = g.position + k
+            let idx = min(max(g.position, 0), g.items.count) + k
             let item = idx < g.items.count ? g.items[idx] : nil
             tasks.append(OwedTask(goalID: g.id, slot: i, forDay: forDay, isCatchUp: isCatchUp, item: item))
         }

@@ -107,3 +107,14 @@ private func undo(_ data: inout AppData, _ slot: Int, _ forDay: String, today: S
     try mark(&d, 0, "2026-11-16", today: "2026-11-17")
     #expect(d == before)
 }
+
+@Test func markDoneWithOutOfRangePositionDoesNotCrash() throws {
+    var d = Fixtures.make(firstUse: "2026-11-17", lists: [0: items(3), 1: items(3)])
+    d.goals[0].position = 99
+    d.goals[1].position = -4
+    try mark(&d, 0, "2026-11-17", today: "2026-11-17")
+    try mark(&d, 1, "2026-11-17", today: "2026-11-17")
+    #expect(d.days["2026-11-17"]?.completions[ids[0].uuidString]?.itemIndex == nil)
+    #expect(d.days["2026-11-17"]?.completions[ids[1].uuidString]?.itemIndex == 0)
+    #expect(d.goals[1].position == 1)
+}

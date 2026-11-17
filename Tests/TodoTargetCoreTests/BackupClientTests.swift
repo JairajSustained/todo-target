@@ -228,3 +228,13 @@ private func json(_ d: Data) -> [String: Any] { (try? JSONSerialization.jsonObje
     #expect(BackupClient.userID(fromJWT: "h.\(body).s") == "user-123")
     #expect(BackupClient.userID(fromJWT: "access-1") == nil)
 }
+
+@Test func backupPayloadValidation() {
+    #expect(payload().isValid)
+    var p = payload(); p.goals.removeLast()
+    #expect(!p.isValid)
+    var dupes = payload(); dupes.goals[1].id = dupes.goals[0].id
+    #expect(!dupes.isValid)
+    var pos = payload(); pos.goals[0].position = 3
+    #expect(!pos.isValid)
+}

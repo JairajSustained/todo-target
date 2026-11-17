@@ -74,6 +74,21 @@ public struct AppData: Codable, Equatable, Sendable {
         self.settings = settings
     }
 
+    public static let currentSchemaVersion = 1
+    /// The app holds exactly 3 goals (D2).
+    public static let goalCount = 3
+
+    /// True when the goals are usable: exactly 3, unique IDs, each position within its list.
+    static func goalsAreValid(_ goals: [Goal]) -> Bool {
+        guard goals.count == goalCount, Set(goals.map(\.id)).count == goals.count else { return false }
+        return goals.allSatisfy { (0...$0.items.count).contains($0.position) }
+    }
+
+    /// False for data the app must not use: unknown schema, wrong goal count, duplicate IDs, bad positions.
+    public var isValid: Bool {
+        schemaVersion == AppData.currentSchemaVersion && AppData.goalsAreValid(goals)
+    }
+
     public static func pristine() -> AppData {
         AppData(goals: (1...3).map { Goal(name: "Goal \($0)") })
     }

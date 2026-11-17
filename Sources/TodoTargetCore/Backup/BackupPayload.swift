@@ -19,6 +19,9 @@ public struct BackupPayload: Codable, Equatable, Sendable {
         self.init(goals: data.goals, days: data.days, firstUseDay: data.firstUseDay, savedAt: savedAt)
     }
 
+    /// False for a backup the app must not restore.
+    public var isValid: Bool { AppData.goalsAreValid(goals) }
+
     /// Builds local data from a backup. Local settings stay as they are.
     public func appData(keeping settings: Settings) -> AppData {
         AppData(goals: goals, days: days, firstUseDay: firstUseDay, settings: settings)

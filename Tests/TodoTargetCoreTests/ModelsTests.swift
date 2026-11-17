@@ -16,3 +16,26 @@ import Foundation
 @Test func renamedGoalOrImportedListIsNotPristine() {
     var d = AppData.pristine(); d.goals[0].name = "DSA"; #expect(!d.isPristine)
 }
+
+@Test func validDataPassesValidation() {
+    #expect(AppData.pristine().isValid)
+    var d = AppData.pristine(); d.goals[0].items = [ListItem(group: "g", title: "t")]; d.goals[0].position = 1
+    #expect(d.isValid)  // position == items.count is allowed (list complete)
+}
+
+@Test func invalidDataFailsValidation() {
+    var wrongCount = AppData.pristine(); wrongCount.goals.removeLast()
+    #expect(!wrongCount.isValid)
+    var tooMany = AppData.pristine(); tooMany.goals.append(Goal(name: "x"))
+    #expect(!tooMany.isValid)
+    var dupes = AppData.pristine(); dupes.goals[1].id = dupes.goals[0].id
+    #expect(!dupes.isValid)
+    var high = AppData.pristine(); high.goals[0].position = 1
+    #expect(!high.isValid)  // no items, so only 0 is valid
+    var negative = AppData.pristine(); negative.goals[0].position = -1
+    #expect(!negative.isValid)
+    var schema0 = AppData.pristine(); schema0.schemaVersion = 0
+    #expect(!schema0.isValid)
+    var schema2 = AppData.pristine(); schema2.schemaVersion = 2
+    #expect(!schema2.isValid)
+}

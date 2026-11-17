@@ -140,6 +140,10 @@ final class BackupCoordinator: ObservableObject {
     }
 
     private func applyRestore(_ payload: BackupPayload) {
+        guard payload.isValid else {
+            status = "The backup is damaged. Nothing was changed."
+            return
+        }
         model.replaceData(payload.appData(keeping: model.data.settings))
         model.clearRecoveryFlag()
         lastSyncedAt = payload.savedAt
@@ -180,6 +184,7 @@ final class BackupCoordinator: ObservableObject {
         guard let c = client() else { status = "Backup is not set up"; return }
         do {
             guard let payload = try await c.pull() else { status = "No backup found"; return }
+            guard payload.isValid else { status = "The backup is damaged. Nothing was changed."; return }
             if BackupRestore.decision(local: model.data) == .needsConfirmation {
                 let a = NSAlert()
                 a.messageText = "Replace the data on this Mac?"

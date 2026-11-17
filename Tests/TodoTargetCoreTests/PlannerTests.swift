@@ -76,3 +76,13 @@ private func owed(_ d: AppData) -> [OwedTask] { Planner.owedTasks(data: d, today
         #expect(Planner.iconLevel(done: d, total: t) == l)
     }
 }
+
+@Test func outOfRangePositionNeverCrashes() {
+    var d = Fixtures.make(firstUse: today, lists: [0: items(3), 1: items(3)])
+    d.goals[0].position = 99
+    d.goals[1].position = -5
+    let t = owed(d)
+    #expect(t.count == 3)
+    #expect(t[0].item == nil)                    // clamped to the end of the list
+    #expect(t[1].item == items(3)[0])            // clamped to the start
+}

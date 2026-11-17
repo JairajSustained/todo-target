@@ -35,11 +35,13 @@ public enum StreakEngine {
 
     public static func evaluate(data: AppData, today: DayKey, calendar: Calendar) -> StreakState {
         let yesterday = today.adding(days: -1, calendar: calendar)
+        // Only a data set with exactly 3 goals can have a full day. With 0 goals, "all done" would be true for free.
         let goalCount = data.goals.count
+        let valid = goalCount == AppData.goalCount
 
-        func full(_ d: DayKey) -> Bool { ownCount(data, d) == goalCount }
+        func full(_ d: DayKey) -> Bool { valid && ownCount(data, d) == goalCount }
         func recoveredFull(_ d: DayKey) -> Bool {
-            !full(d) && completionCount(data, d) == goalCount
+            valid && !full(d) && completionCount(data, d) == goalCount
         }
 
         // Scan from firstUseDay to today.

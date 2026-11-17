@@ -23,8 +23,11 @@ public enum Actions {
         }
         guard allowed else { throw ActionError.notAllowed }
 
+        // Keep the position inside its list, even if the stored value is not.
         let goal = data.goals[gi]
-        let index: Int? = goal.position < goal.items.count ? goal.position : nil
+        let pos = min(max(goal.position, 0), goal.items.count)
+        data.goals[gi].position = pos
+        let index: Int? = pos < goal.items.count ? pos : nil
         var record = data.days[forDay.string] ?? DayRecord()
         record.completions[key] = Completion(itemIndex: index, doneOn: today.string)
         data.days[forDay.string] = record
