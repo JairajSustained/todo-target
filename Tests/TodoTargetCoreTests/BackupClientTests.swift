@@ -67,9 +67,12 @@ private struct Rig {
     let tokens: MemoryTokenStore
     let client: BackupClient
 
-    init(session: AuthSession?, handler: @escaping StubProtocol.Handler) {
+    /// `issuedFor` is the project URL the stored session belongs to. It defaults to this rig's URL.
+    init(session: AuthSession?, issuedFor: String? = nil, handler: @escaping StubProtocol.Handler) {
         let host = self.host
-        tokens = MemoryTokenStore(session)
+        var stored = session
+        stored?.projectURL = issuedFor ?? "https://\(host)"
+        tokens = MemoryTokenStore(stored)
         StubProtocol.register(host: host, handler: handler)
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [StubProtocol.self]
@@ -80,7 +83,7 @@ private struct Rig {
 }
 
 private func validSession() -> AuthSession {
-    AuthSession(accessToken: "access-1", refreshToken: "refresh-1", expiresAt: Date().addingTimeInterval(3600))
+    AuthSession(accessToken: "access-1", refreshToken: "refresh-1", expiresAt: Date().addingTimeInterval(3600), projectURL: "")
 }
 private func payload() -> BackupPayload {
     BackupPayload(data: Fixtures.make(own: ["2026-11-17": [0]], firstUse: "2026-11-17"),
@@ -117,7 +120,7 @@ private func json(_ d: Data) -> [String: Any] { (try? JSONSerialization.jsonObje
 }
 
 @Test func expiredTokenIsRefreshedBeforePush() async throws {
-    let expired = AuthSession(accessToken: "access-1", refreshToken: "refresh-1", expiresAt: Date().addingTimeInterval(-60))
+    let expired = AuthSession(accessToken: "access-1", refreshToken: "refresh-1", expiresAt: Date().addingTimeInterval(-60), projectURL: "")
     let rig = Rig(session: expired) { cap in
         if cap.request.url?.path == "/auth/v1/token" {
             let body = #"{"access_token":"access-2","refresh_token":"refresh-2","expires_in":3600,"token_type":"bearer"}"#
@@ -137,7 +140,7 @@ private func json(_ d: Data) -> [String: Any] { (try? JSONSerialization.jsonObje
 }
 
 @Test func rejectedRefreshClearsSessionAndThrowsNotSignedIn() async {
-    let expired = AuthSession(accessToken: "a", refreshToken: "r", expiresAt: Date().addingTimeInterval(-60))
+    let expired = AuthSession(accessToken: "a", refreshToken: "r", expiresAt: Date().addingTimeInterval(-60), projectURL: "")
     let rig = Rig(session: expired) { _ in (400, Data(#"{"error":"invalid_grant"}"#.utf8)) }
     await #expect(throws: BackupError.notSignedIn) { try await rig.client.push(payload()) }
     #expect(rig.tokens.read() == nil)
@@ -237,4 +240,45 @@ private func json(_ d: Data) -> [String: Any] { (try? JSONSerialization.jsonObje
     #expect(!dupes.isValid)
     var pos = payload(); pos.goals[0].position = 3
     #expect(!pos.isValid)
+}
+
+// MARK: Session is bound to its project URL
+
+@Test func sessionIssuedForAnotherURLIsNeverSent() async {
+    let rig = Rig(session: validSession(), issuedFor: "https://other.example") { _ in (201, Data()) }
+    #expect(rig.client.isSignedIn == false)
+    await #expect(throws: BackupError.notSignedIn) { try await rig.client.push(payload()) }
+    await #expect(throws: BackupError.notSignedIn) { _ = try await rig.client.pull() }
+    #expect(rig.requests.isEmpty)           // no token and no request left for the wrong host
+    #expect(rig.tokens.read() == nil)       // the foreign session is deleted
+}
+
+@Test func expiredSessionForAnotherURLIsNotRefreshedThere() async {
+    let expired = AuthSession(accessToken: "a", refreshToken: "r", expiresAt: Date().addingTimeInterval(-60), projectURL: "")
+    let rig = Rig(session: expired, issuedFor: "https://other.example") { _ in (200, Data()) }
+    await #expect(throws: BackupError.notSignedIn) { try await rig.client.push(payload()) }
+    #expect(rig.requests.isEmpty)           // the refresh token is not sent to this host either
+}
+
+@Test func completeSignInRecordsTheProjectURL() throws {
+    let rig = Rig(session: nil) { _ in (200, Data()) }
+    try rig.client.completeSignIn(callback: URL(string: "todotarget://auth-callback#access_token=a&refresh_token=r&expires_in=3600")!)
+    #expect(rig.tokens.read()?.projectURL == "https://\(rig.host)")
+}
+
+@Test func refreshKeepsTheProjectURL() async throws {
+    let expired = AuthSession(accessToken: "a", refreshToken: "r", expiresAt: Date().addingTimeInterval(-60), projectURL: "")
+    let rig = Rig(session: expired) { cap in
+        cap.request.url?.path == "/auth/v1/token"
+            ? (200, Data(#"{"access_token":"a2","refresh_token":"r2","expires_in":3600}"#.utf8)) : (201, Data())
+    }
+    try await rig.client.push(payload())
+    #expect(rig.tokens.read()?.projectURL == "https://\(rig.host)")
+}
+
+@Test func projectIDIgnoresCaseAndTrailingSlash() {
+    #expect(BackupClient.projectID(for: URL(string: "https://ABC.supabase.co/")!) == "https://abc.supabase.co")
+    #expect(BackupClient.projectID(for: URL(string: "https://abc.supabase.co")!) == "https://abc.supabase.co")
+    #expect(BackupClient.projectID(for: URL(string: "https://abc.supabase.co:8443/x/")!) == "https://abc.supabase.co:8443/x")
+    #expect(BackupClient.projectID(for: URL(string: "https://abc.supabase.co")!) != BackupClient.projectID(for: URL(string: "https://xyz.supabase.co")!))
 }

@@ -42,6 +42,32 @@ final class BackupCoordinator: ObservableObject {
 
     var isConfigured: Bool { client() != nil }
 
+    /// Saves the Supabase URL and anon key (called on commit, not per keystroke).
+    /// A different project URL deletes the saved session: tokens never go to a URL
+    /// they were not issued for.
+    func applyConnection(url: String, key: String) {
+        let newURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        func id(_ s: String?) -> String {
+            guard let s = s?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return "" }
+            return URL(string: s).map(BackupClient.projectID(for:)) ?? s
+        }
+        let projectChanged = id(model.data.settings.supabaseURL) != id(newURL)
+        if projectChanged {
+            // Before the settings change, so the change cannot trigger a backup with the old session.
+            debounce?.cancel()
+            tokens.clear()
+            synced = false
+            lastSyncedAt = nil
+            status = ""
+        }
+        model.updateSettings {
+            $0.supabaseURL = newURL.isEmpty ? nil : newURL
+            $0.supabaseAnonKey = newKey.isEmpty ? nil : newKey
+        }
+        refreshState()
+    }
+
     func refreshState() {
         guard let c = client() else { signedIn = false; status = ""; return }
         signedIn = c.isSignedIn

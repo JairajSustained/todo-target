@@ -5,11 +5,15 @@ public struct AuthSession: Codable, Equatable, Sendable {
     public var accessToken: String
     public var refreshToken: String
     public var expiresAt: Date
+    /// The Supabase project this session was issued for (`BackupClient.projectID`).
+    /// Tokens are never sent to any other URL.
+    public var projectURL: String
 
-    public init(accessToken: String, refreshToken: String, expiresAt: Date) {
+    public init(accessToken: String, refreshToken: String, expiresAt: Date, projectURL: String) {
         self.accessToken = accessToken
         self.refreshToken = refreshToken
         self.expiresAt = expiresAt
+        self.projectURL = projectURL
     }
 }
 

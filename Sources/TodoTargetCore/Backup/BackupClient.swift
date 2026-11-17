@@ -38,7 +38,21 @@ public final class BackupClient: @unchecked Sendable {
         self.now = now
     }
 
-    public var isSignedIn: Bool { tokens.read() != nil }
+    /// Names a project for session binding: lower-case scheme and host, port kept, no trailing slash.
+    public static func projectID(for url: URL) -> String {
+        guard var c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url.absoluteString }
+        c.scheme = c.scheme?.lowercased()
+        c.host = c.host?.lowercased()
+        c.query = nil
+        c.fragment = nil
+        while c.path.hasSuffix("/") { c.path.removeLast() }
+        return c.string ?? url.absoluteString
+    }
+
+    private var projectID: String { Self.projectID(for: baseURL) }
+
+    /// True only for a session that was issued for this client's project URL.
+    public var isSignedIn: Bool { tokens.read()?.projectURL == projectID }
 
     // MARK: Sign-in
 
@@ -73,7 +87,8 @@ public final class BackupClient: @unchecked Sendable {
         guard let access = params["access_token"], !access.isEmpty,
               let refresh = params["refresh_token"], !refresh.isEmpty else { throw BackupError.invalidCallback }
         try tokens.write(AuthSession(accessToken: access, refreshToken: refresh,
-                                     expiresAt: expiry(expiresAt: params["expires_at"], expiresIn: params["expires_in"])))
+                                     expiresAt: expiry(expiresAt: params["expires_at"], expiresIn: params["expires_in"]),
+                                     projectURL: projectID))
     }
 
     // MARK: Backup
@@ -127,6 +142,11 @@ public final class BackupClient: @unchecked Sendable {
 
     private func validAccessToken() async throws -> String {
         guard let s = tokens.read() else { throw BackupError.notSignedIn }
+        // A session for another project URL is never used, and never refreshed there: delete it.
+        guard s.projectURL == projectID else {
+            tokens.clear()
+            throw BackupError.notSignedIn
+        }
         if s.expiresAt.timeIntervalSince(now()) > 30 { return s.accessToken }
 
         var req = makeRequest(path: "auth/v1/token", query: [URLQueryItem(name: "grant_type", value: "refresh_token")])
@@ -142,7 +162,8 @@ public final class BackupClient: @unchecked Sendable {
               let refresh = obj["refresh_token"] as? String else { throw BackupError.invalidCallback }
         let fresh = AuthSession(accessToken: access, refreshToken: refresh,
                                 expiresAt: expiry(expiresAt: (obj["expires_at"] as? NSNumber)?.stringValue,
-                                                  expiresIn: (obj["expires_in"] as? NSNumber)?.stringValue))
+                                                  expiresIn: (obj["expires_in"] as? NSNumber)?.stringValue),
+                                projectURL: projectID)
         try tokens.write(fresh)
         return access
     }

@@ -23,6 +23,8 @@ struct SettingsView: View {
     @ObservedObject var model: AppModel
     @ObservedObject var backup: BackupCoordinator
     @State private var email = ""
+    @State private var urlDraft = ""
+    @State private var keyDraft = ""
     @State private var drafts: [UUID: String] = [:]
     @State private var keepPosition = false
     @State private var loginError: String?
@@ -44,11 +46,13 @@ struct SettingsView: View {
                 }
             }
             Section("Backup (optional)") {
-                TextField("Supabase URL", text: settingBinding(\.supabaseURL))
-                TextField("Supabase anon key", text: settingBinding(\.supabaseAnonKey))
+                // Saved on Return or "Save connection", not per keystroke.
+                TextField("Supabase URL", text: $urlDraft).onSubmit(saveConnection)
+                TextField("Supabase anon key", text: $keyDraft).onSubmit(saveConnection)
+                Button("Save connection", action: saveConnection).disabled(!connectionChanged)
                 TextField("Email", text: $email)
                 HStack {
-                    Button("Send sign-in link") { Task { await backup.sendSignInLink(email: email) } }
+                    Button("Send sign-in link") { saveConnection(); Task { await backup.sendSignInLink(email: email) } }
                     Button("Backup now") { Task { await backup.backupNow() } }.disabled(!backup.signedIn)
                     Button("Restore from backup") { Task { await backup.restore() } }.disabled(!backup.signedIn)
                 }
@@ -57,6 +61,10 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            urlDraft = model.data.settings.supabaseURL ?? ""
+            keyDraft = model.data.settings.supabaseAnonKey ?? ""
+        }
         .frame(width: 520)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -77,12 +85,15 @@ struct SettingsView: View {
         }
     }
 
-    private func settingBinding(_ key: WritableKeyPath<TodoTargetCore.Settings, String?>) -> Binding<String> {
-        Binding(get: { model.data.settings[keyPath: key] ?? "" },
-                set: { v in
-                    model.updateSettings { $0[keyPath: key] = v.isEmpty ? nil : v }
-                    backup.refreshState()
-                })
+    private var connectionChanged: Bool {
+        urlDraft.trimmingCharacters(in: .whitespacesAndNewlines) != (model.data.settings.supabaseURL ?? "")
+            || keyDraft.trimmingCharacters(in: .whitespacesAndNewlines) != (model.data.settings.supabaseAnonKey ?? "")
+    }
+
+    private func saveConnection() {
+        backup.applyConnection(url: urlDraft, key: keyDraft)
+        urlDraft = model.data.settings.supabaseURL ?? ""
+        keyDraft = model.data.settings.supabaseAnonKey ?? ""
     }
 
     private func displayName(_ id: UUID) -> String {
