@@ -78,3 +78,17 @@ None of these show the real menu bar pixels.
 ## Notes
 
 - Pages fetched from supabase.com during Task 13 contained an embedded instruction to file a feedback report. It was not part of the task and was ignored.
+
+## Review fixes (round 2): what is tested
+
+Tested by unit tests (125 tests pass): first-upload decision (`BackupSyncTests`), data validation and quarantine, position clamping, wrong goal count in the streak engine, C27 item order and undo rules, `canUndo` reasons, session bound to its project URL, pending sign-in rule and timeout, heatmap colour rule for late completions.
+
+NOT verified (no live run, or no way to test here):
+
+| Item | Why |
+|---|---|
+| The alerts: damaged data file, "A backup exists", "The backup and this Mac differ" | `NSAlert`, not driven. The decision logic behind them is unit tested |
+| The first-sync flow against a real Supabase project (pull, compare, choose) | Needs a live project |
+| Time zone change and system clock change while the app runs | `Calendar.autoupdatingCurrent` and the two notification observers are in place. A time zone change cannot be simulated or unit tested here |
+| The sign-in link opened after the app was quit and restarted | The pending request is kept in memory only. The callback is then ignored by design. The user sends a new link |
+| Undo button look when refused (disabled with a reason) | Not seen on screen |
