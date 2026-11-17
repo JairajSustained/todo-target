@@ -19,13 +19,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireDayRefresh()
     }
 
-    // Placeholder content. Task 11 replaces it with the real panel.
     private func togglePanel(relativeTo button: NSStatusBarButton) {
         if popover.isShown { popover.performClose(nil); return }
-        let s = model.streak
-        let text = "Streak: \(s.current)   Done: \(model.progress.done)/\(model.progress.total)"
-        popover.contentViewController = NSHostingController(rootView: Text(text).padding())
+        if popover.contentViewController == nil {
+            // Settings, import and backup arrive in later tasks; their lines do nothing yet.
+            let host = NSHostingController(rootView: PanelView(model: model, actions: PanelActions()))
+            host.sizingOptions = [.preferredContentSize]
+            popover.contentViewController = host
+        }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
     }
 
     // MARK: Day refresh: midnight timer, wake, day-changed.
