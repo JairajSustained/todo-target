@@ -1,0 +1,29 @@
+name: Release
+
+# Runs when a tag like v0.1.0 is pushed. Builds the app, runs the tests,
+# and attaches build/TodoTarget.zip to a GitHub Release.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test
+        run: ./scripts/test.sh
+
+      - name: Build the app bundle
+        run: ./scripts/build-app.sh
+
+      - name: Create the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/TodoTarget.zip
+          generate_release_notes: true
