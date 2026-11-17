@@ -100,3 +100,30 @@ private let sample = Fixtures.make(own: full("2026-11-06", "2026-11-16"), firstU
     let data = Fixtures.make(own: ["2025-12-31": [0], "2026-01-01": [0]], firstUse: "2025-12-31")
     #expect(build(data).availableYears == [2026, 2025])
 }
+
+@Test func lateCompletionColoursTheMissedDayOnlyWhenTheDayIsSaved() {
+    // 16 Nov: goal 1 on time, goal 2 late. Today is not full, so the day is not saved yet.
+    let open = Fixtures.make(own: full("2026-11-06", "2026-11-15").merging(["2026-11-16": [0], "2026-11-17": [0, 1]]) { a, _ in a },
+                             recovered: ["2026-11-16": [1]], firstUse: "2026-11-06")
+    let m = build(open)
+    #expect(cell(m, "2026-11-16")?.kind == .day(level: 1))
+    #expect(cell(m, "2026-11-16")?.tooltip == "Mon 16 Nov 2026: 1 of 3")
+    #expect(cell(m, "2026-11-16")?.savedByCatchUp == false)
+
+    // Every missed goal is late-done but today is still open: counted needs a full today, so still not saved.
+    let allLateTodayOpen = Fixtures.make(own: full("2026-11-06", "2026-11-15").merging(["2026-11-16": [0]]) { a, _ in a },
+                                         recovered: ["2026-11-16": [1, 2]], firstUse: "2026-11-06")
+    #expect(cell(build(allLateTodayOpen), "2026-11-16")?.kind == .day(level: 1))
+
+    // Today becomes full: the day is saved, so the late work counts and the square turns green.
+    let saved = Fixtures.make(own: full("2026-11-06", "2026-11-15").merging(["2026-11-16": [0], "2026-11-17": [0, 1, 2]]) { a, _ in a },
+                              recovered: ["2026-11-16": [1, 2]], firstUse: "2026-11-06")
+    #expect(cell(build(saved), "2026-11-16")?.kind == .day(level: 3))
+    #expect(cell(build(saved), "2026-11-16")?.savedByCatchUp == true)
+}
+
+@Test func lateCompletionsOnAnOldBrokenDayDoNotColourIt() {
+    // 10 Nov: goal 1 on time, goals 2 and 3 done late on 11 Nov, but 11 Nov was not full: the day was never saved.
+    let data = Fixtures.make(own: ["2026-11-10": [0], "2026-11-11": [0]], recovered: ["2026-11-10": [1, 2]], firstUse: "2026-11-01")
+    #expect(cell(build(data), "2026-11-10")?.kind == .day(level: 1))
+}

@@ -83,7 +83,8 @@ public struct HeatmapModel: Equatable, Sendable {
             } else if d < firstUse {
                 kind = .beforeStart
             } else {
-                level = StreakEngine.completionCount(data, d)
+                // Late (recovered) work colours a missed day only when that day is saved (counted).
+                level = state.activeDays.contains(d) ? StreakEngine.completionCount(data, d) : StreakEngine.ownCount(data, d)
                 kind = .day(level: level)
             }
             let hasRecovered = data.days[d.string]?.completions.values.contains { $0.doneOn != d.string } ?? false
