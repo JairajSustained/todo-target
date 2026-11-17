@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusController: StatusItemController!
     private let popover = NSPopover()
     private var midnightTimer: Timer?
+    private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model = AppModel(store: DataStore(directory: DataStore.defaultDirectory()),
@@ -17,13 +18,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.togglePanel(relativeTo: button)
         }
         wireDayRefresh()
+        applyLaunchAtLogin()
+        if model.data.isPristine { openSettings() }
+    }
+
+    /// Opens (or raises) the Settings window.
+    func openSettings() {
+        popover.performClose(nil)
+        if settingsWindow == nil {
+            let host = NSHostingController(rootView: SettingsView(model: model))
+            let window = NSWindow(contentViewController: host)
+            window.title = "todo-target Settings"
+            window.styleMask = [.titled, .closable]
+            window.isReleasedWhenClosed = false
+            window.center()
+            settingsWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    /// Applies the saved "Start at login" choice. Skipped outside a `.app` bundle.
+    private func applyLaunchAtLogin() {
+        guard LaunchAtLogin.isBundled else { return }
+        try? LaunchAtLogin.set(model.data.settings.launchAtLogin)
     }
 
     private func togglePanel(relativeTo button: NSStatusBarButton) {
         if popover.isShown { popover.performClose(nil); return }
         if popover.contentViewController == nil {
-            // Settings, import and backup arrive in later tasks; their lines do nothing yet.
-            let host = NSHostingController(rootView: PanelView(model: model, actions: PanelActions()))
+            // "Import list…" opens Settings, where each goal has its own import button.
+            // Backup arrives in a later task; its line stays disabled.
+            var actions = PanelActions()
+            actions.openSettings = { [weak self] in self?.openSettings() }
+            actions.importList = { [weak self] in self?.openSettings() }
+            let host = NSHostingController(rootView: PanelView(model: model, actions: actions))
             host.sizingOptions = [.preferredContentSize]
             popover.contentViewController = host
         }
