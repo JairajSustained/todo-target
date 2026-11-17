@@ -99,7 +99,12 @@ final class AppModel: ObservableObject {
         commit(new)
     }
 
-    private func commit(_ new: AppData) {
+    private func commit(_ proposed: AppData) {
+        // Never save or upload invalid data: clamp positions, and refuse if the structure is broken.
+        guard let new = proposed.sanitized() else {
+            saveError = "Refused a change that would make the data invalid."
+            return
+        }
         guard new != data else { return }
         data = new
         do { try store.save(new); saveError = nil } catch { saveError = "Could not save: \(error.localizedDescription)" }

@@ -25,7 +25,7 @@ private func undo(_ data: inout AppData, _ slot: Int, _ forDay: String, today: S
     var d = Fixtures.make(firstUse: "2026-11-17", lists: [0: items(3)])
     try mark(&d, 0, "2026-11-17", today: "2026-11-17")
     #expect(d.goals[0].position == 1)
-    #expect(d.days["2026-11-17"]?.completions[ids[0].uuidString] == Completion(itemIndex: 0, doneOn: "2026-11-17"))
+    #expect(d.days["2026-11-17"]?.completions[ids[0].uuidString] == Completion(itemIndex: 0, doneOn: "2026-11-17", listVersion: 0))
 }
 
 @Test func markDoneTwiceIsNoOp() throws {
@@ -198,4 +198,87 @@ private func completion(_ d: AppData, slot: Int, onDay: String) -> Completion? {
     #expect(Actions.canUndo(d, goalID: ids[2], forDay: day("2026-11-17"), today: day("2026-11-17"), calendar: utc)
             == .refused("The list was imported again after this mark."))
     #expect(throws: ActionError.notAllowed) { try undo(&d, 2, "2026-11-17", today: "2026-11-17") }
+}
+
+
+// MARK: Undo and list re-import (second review)
+
+private func reimport(_ d: inout AppData, slot: Int, count: Int, keep: Bool) {
+    d.goals[slot].replaceList(items(count), keepPosition: keep)
+}
+private let today17 = day("2026-11-17"), yesterday16 = day("2026-11-16")
+
+/// Reviewer input A: slot 2 has 2 items at position 1; yesterday's row is owed.
+@Test func reimportBetweenTheTwoMarksThenUndoTodayCannotBreakPosition() throws {
+    var own = full("2026-11-06", "2026-11-15"); own["2026-11-16"] = [0, 1]
+    var d = Fixtures.make(own: own, firstUse: "2026-11-06", lists: [2: items(2)])
+    d.goals[2].position = 1
+    try mark(&d, 2, "2026-11-16", today: "2026-11-17")                 // yesterday's row: item 1, position 2
+    reimport(&d, slot: 2, count: 1, keep: false)                       // new list, position 0
+    try mark(&d, 2, "2026-11-17", today: "2026-11-17")                 // today's row: item 0 of the new list
+    #expect(d.isValid)
+    // The partner mark (yesterday's) belongs to the old list, so undo must be refused.
+    let check = Actions.canUndo(d, goalID: ids[2], forDay: today17, today: today17, calendar: utc)
+    #expect(check == .refused("The list was imported again after this mark."))
+    #expect(throws: ActionError.notAllowed) { try undo(&d, 2, "2026-11-17", today: "2026-11-17") }
+    #expect(d.isValid)
+}
+
+/// Reviewer input B: position 4 in 10 items; both rows ticked; shorter list imported with keepPosition.
+@Test func shorterReimportKeepingPositionThenUndoYesterdayStaysValid() throws {
+    var own = full("2026-11-06", "2026-11-15"); own["2026-11-16"] = [0, 1]
+    var d = Fixtures.make(own: own, firstUse: "2026-11-06", lists: [2: items(10)])
+    d.goals[2].position = 4
+    try mark(&d, 2, "2026-11-16", today: "2026-11-17")
+    try mark(&d, 2, "2026-11-17", today: "2026-11-17")
+    reimport(&d, slot: 2, count: 5, keep: true)
+    #expect(d.isValid)
+    #expect(Actions.canUndo(d, goalID: ids[2], forDay: yesterday16, today: today17, calendar: utc)
+            == .refused("The list was imported again after this mark."))
+    #expect(throws: ActionError.notAllowed) { try undo(&d, 2, "2026-11-16", today: "2026-11-17") }
+    #expect(d.isValid)
+}
+
+@Test func undoAlwaysLeavesPositionInsideTheList() throws {
+    // Even if a mark and the position disagree, undo must clamp.
+    var d = Fixtures.make(own: ["2026-11-17": [0]], firstUse: "2026-11-17", lists: [0: items(3)])
+    d.days["2026-11-17"]?.completions[ids[0].uuidString] = Completion(itemIndex: 2, doneOn: "2026-11-17", listVersion: 0)
+    d.goals[0].position = 3
+    try undo(&d, 0, "2026-11-17", today: "2026-11-17")
+    #expect(d.goals[0].position == 2)
+    #expect(d.isValid)
+}
+
+/// Brute force: list sizes 0...6, every start position, every owed state, one re-import at any point.
+@Test func bruteForceMarkUndoAndOneReimportKeepDataValid() {
+    var visited = 0
+    for n in 0...6 { for p in 0...n { for yesterday in [Set<Int>([0, 1]), [0, 1, 2]] as [Set<Int>] {
+        var own = full("2026-11-06", "2026-11-15"); own["2026-11-16"] = yesterday
+        var d0 = Fixtures.make(own: own, firstUse: "2026-11-06", lists: [2: items(n)])
+        d0.goals[2].position = p
+        var queue: [(AppData, Bool)] = [(d0, false)]
+        var seen = Set<String>()
+        func keyOf(_ d: AppData, _ imp: Bool) -> String {
+            let e = JSONEncoder(); e.outputFormatting = .sortedKeys
+            return String(decoding: (try? e.encode(d)) ?? Data(), as: UTF8.self) + "\(imp)"
+        }
+        var head = 0
+        while head < queue.count {
+            let (d, imported) = queue[head]; head += 1
+            visited += 1
+            #expect(d.isValid, "invalid after ops: n=\(n) p=\(p) y=\(yesterday.sorted()) pos=\(d.goals[2].position)/\(d.goals[2].items.count)")
+            var next: [(AppData, Bool)] = []
+            for y in [true, false] {
+                var a = d; if (try? Actions.markDone(&a, goalID: ids[2], forDay: y ? yesterday16 : today17, today: today17, calendar: utc)) != nil { next.append((a, imported)) }
+                var b = d; if (try? Actions.undo(&b, goalID: ids[2], forDay: y ? yesterday16 : today17, today: today17, calendar: utc)) != nil { next.append((b, imported)) }
+            }
+            if !imported {
+                for m in Set([max(0, n - 2), max(0, n - 1), n, n + 1]) { for keep in [true, false] {
+                    var c = d; reimport(&c, slot: 2, count: m, keep: keep); next.append((c, true))
+                } }
+            }
+            for (c, imp) in next where seen.insert(keyOf(c, imp)).inserted { queue.append((c, imp)) }
+        }
+    } } }
+    #expect(visited > 500)
 }

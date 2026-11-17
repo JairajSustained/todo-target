@@ -282,3 +282,10 @@ private func json(_ d: Data) -> [String: Any] { (try? JSONSerialization.jsonObje
     #expect(BackupClient.projectID(for: URL(string: "https://abc.supabase.co:8443/x/")!) == "https://abc.supabase.co:8443/x")
     #expect(BackupClient.projectID(for: URL(string: "https://abc.supabase.co")!) != BackupClient.projectID(for: URL(string: "https://xyz.supabase.co")!))
 }
+
+@Test func invalidPayloadIsNeverPushed() async {
+    let rig = Rig(session: validSession()) { _ in (201, Data()) }
+    var bad = payload(); bad.goals[0].position = 9      // no items, so only 0 is valid
+    await #expect(throws: BackupError.invalidData) { try await rig.client.push(bad) }
+    #expect(rig.requests.isEmpty)
+}

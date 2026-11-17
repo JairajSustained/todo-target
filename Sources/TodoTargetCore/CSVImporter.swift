@@ -93,6 +93,7 @@ extension Goal {
     /// Replaces the list. The position resets to 0 unless `keepPosition`; it is clamped to the new length.
     public mutating func replaceList(_ items: [ListItem], keepPosition: Bool) {
         self.items = items
+        listVersion += 1
         position = keepPosition ? min(max(position, 0), items.count) : 0
     }
 }

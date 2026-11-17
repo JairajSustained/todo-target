@@ -39,3 +39,33 @@ import Foundation
     var schema2 = AppData.pristine(); schema2.schemaVersion = 2
     #expect(!schema2.isValid)
 }
+
+@Test func sanitizedClampsPositionsAndRejectsBrokenStructure() {
+    var d = AppData.pristine()
+    d.goals[0].items = [ListItem(group: "g", title: "t")]
+    d.goals[0].position = 5
+    d.goals[1].position = -2
+    let fixed = d.sanitized()
+    #expect(fixed?.isValid == true)
+    #expect(fixed?.goals[0].position == 1); #expect(fixed?.goals[1].position == 0)
+    var broken = AppData.pristine(); broken.goals.removeLast()
+    #expect(broken.sanitized() == nil)
+    var dupes = AppData.pristine(); dupes.goals[1].id = dupes.goals[0].id
+    #expect(dupes.sanitized() == nil)
+    #expect(AppData.pristine().sanitized() != nil)
+}
+
+@Test func oldDataWithoutListVersionStillDecodes() throws {
+    let json = #"{"id":"00000000-0000-0000-0000-000000000001","name":"x","items":[],"position":0}"#
+    let g = try JSONDecoder().decode(Goal.self, from: Data(json.utf8))
+    #expect(g.listVersion == 0)
+    let c = try JSONDecoder().decode(Completion.self, from: Data(#"{"doneOn":"2026-11-17"}"#.utf8))
+    #expect(c.listVersion == nil)
+}
+
+@Test func replacingAListBumpsItsVersion() {
+    var g = Goal(name: "x")
+    #expect(g.listVersion == 0)
+    g.replaceList([ListItem(group: "", title: "a")], keepPosition: true)
+    #expect(g.listVersion == 1)
+}

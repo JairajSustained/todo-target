@@ -17,12 +17,27 @@ public struct Goal: Codable, Equatable, Identifiable, Sendable {
     public var name: String
     public var items: [ListItem]
     public var position: Int
+    /// Counts list imports. A mark made under an older list is never undone against a newer one.
+    public var listVersion: Int = 0
 
-    public init(id: UUID = UUID(), name: String, items: [ListItem] = [], position: Int = 0) {
+    public init(id: UUID = UUID(), name: String, items: [ListItem] = [], position: Int = 0, listVersion: Int = 0) {
         self.id = id
         self.name = name
         self.items = items
         self.position = position
+        self.listVersion = listVersion
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, name, items, position, listVersion }
+
+    // Files written before `listVersion` existed have no such key.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        items = try c.decode([ListItem].self, forKey: .items)
+        position = try c.decode(Int.self, forKey: .position)
+        listVersion = try c.decodeIfPresent(Int.self, forKey: .listVersion) ?? 0
     }
 }
 
@@ -30,10 +45,13 @@ public struct Completion: Codable, Equatable, Sendable {
     public var itemIndex: Int?
     /// A `DayKey.string`.
     public var doneOn: String
+    /// The goal's `listVersion` when the mark was made (set when `itemIndex` is set).
+    public var listVersion: Int?
 
-    public init(itemIndex: Int?, doneOn: String) {
+    public init(itemIndex: Int?, doneOn: String, listVersion: Int? = nil) {
         self.itemIndex = itemIndex
         self.doneOn = doneOn
+        self.listVersion = listVersion
     }
 }
 
@@ -87,6 +105,18 @@ public struct AppData: Codable, Equatable, Sendable {
     /// False for data the app must not use: unknown schema, wrong goal count, duplicate IDs, bad positions.
     public var isValid: Bool {
         schemaVersion == AppData.currentSchemaVersion && AppData.goalsAreValid(goals)
+    }
+
+    /// Data that is safe to save or upload: positions clamped into their lists.
+    /// Returns nil when the structure is broken (goal count, duplicate IDs, schema), which clamping cannot fix.
+    public func sanitized() -> AppData? {
+        guard schemaVersion == AppData.currentSchemaVersion,
+              goals.count == AppData.goalCount, Set(goals.map(\.id)).count == goals.count else { return nil }
+        var copy = self
+        for i in copy.goals.indices {
+            copy.goals[i].position = min(max(copy.goals[i].position, 0), copy.goals[i].items.count)
+        }
+        return copy
     }
 
     public static func pristine() -> AppData {

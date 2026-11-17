@@ -61,10 +61,21 @@ public enum Actions {
         let pos = min(max(data.goals[gi].position, 0), count)
         data.goals[gi].position = pos
         var record = data.days[forDay.string] ?? DayRecord()
-        record.completions[key] = Completion(itemIndex: index, doneOn: today.string)
+        record.completions[key] = Completion(itemIndex: index, doneOn: today.string,
+                                             listVersion: index == nil ? nil : data.goals[gi].listVersion)
         data.days[forDay.string] = record
         if let index { data.goals[gi].position = max(pos, index + 1) }
         if data.firstUseDay == nil { data.firstUseDay = today.string }
+    }
+
+    /// The goal's other mark made today (today's row and yesterday's row can both exist).
+    private static func partnerMark(_ data: AppData, goalID: UUID, forDay: DayKey, today: DayKey,
+                                    calendar: Calendar) -> Completion? {
+        let yesterday = today.adding(days: -1, calendar: calendar)
+        return [today, yesterday].filter { $0 != forDay }.compactMap { day -> Completion? in
+            guard let o = data.days[day.string]?.completions[goalID.uuidString], o.doneOn == today.string else { return nil }
+            return o
+        }.first
     }
 
     /// Says whether `undo` would work, and if not, why in a few words.
@@ -75,8 +86,13 @@ public enum Actions {
             return .refused("Nothing to undo.")
         }
         guard c.doneOn == today.string else { return .refused("Only marks made today can be undone.") }
-        if let i = c.itemIndex, i > goal.position - 1 {
-            return .refused("The list was imported again after this mark.")
+        if let i = c.itemIndex {
+            let imported = "The list was imported again after this mark."
+            // The mark, and the goal's other mark made today, must come from the current list.
+            if (c.listVersion ?? 0) != goal.listVersion { return .refused(imported) }
+            if let o = partnerMark(data, goalID: goalID, forDay: forDay, today: today, calendar: calendar),
+               o.itemIndex != nil, (o.listVersion ?? 0) != goal.listVersion { return .refused(imported) }
+            if i > goal.position - 1 { return .refused(imported) }
         }
         return .allowed
     }
@@ -94,11 +110,7 @@ public enum Actions {
             let state = StreakEngine.evaluate(data: data, today: today, calendar: calendar)
             let owedFromYesterday = state.catchUp?.owedGoalIDs.contains(goalID) ?? false
             // The goal's other mark made today (today's row and yesterday's row can both exist).
-            let yesterday = today.adding(days: -1, calendar: calendar)
-            let otherIndex = [today, yesterday].filter { $0 != forDay }.compactMap { day -> Int? in
-                guard let o = data.days[day.string]?.completions[key], o.doneOn == today.string else { return nil }
-                return o.itemIndex
-            }.first
+            let otherIndex = partnerMark(data, goalID: goalID, forDay: forDay, today: today, calendar: calendar)?.itemIndex
             if let o = otherIndex {
                 data.goals[gi].position = o + 1
             } else if forDay == today && owedFromYesterday {
@@ -106,6 +118,8 @@ public enum Actions {
             } else {
                 data.goals[gi].position = i
             }
+            // Whatever the marks say, the position stays inside the list.
+            data.goals[gi].position = min(max(data.goals[gi].position, 0), data.goals[gi].items.count)
         }
         record.completions[key] = nil
         data.days[forDay.string] = record.completions.isEmpty ? nil : record

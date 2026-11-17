@@ -6,6 +6,8 @@ public enum BackupError: Error, Equatable, Sendable {
     case invalidCallback
     case signInFailed(String)
     case invalidConfiguration
+    /// The payload failed validation. It is never uploaded.
+    case invalidData
 }
 
 /// A small Supabase client over plain web requests. Endpoint shapes, checked against:
@@ -94,6 +96,7 @@ public final class BackupClient: @unchecked Sendable {
     // MARK: Backup
 
     public func push(_ p: BackupPayload) async throws {
+        guard p.isValid else { throw BackupError.invalidData }
         let access = try await validAccessToken()
         var row: [String: Any] = [
             "payload": try JSONSerialization.jsonObject(with: BackupCoding.encoder().encode(p)),
