@@ -30,6 +30,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireDayRefresh()
         applyLaunchAtLogin()
         if model.data.isPristine { openSettings() }
+        if let file = model.recoveredFile { showDamageAlert(fileName: file) }
+    }
+
+    /// Tells the user that `data.json` was damaged and moved aside, and names the file.
+    private func showDamageAlert(fileName: String) {
+        let folder = model.recoveredFileURL?.deletingLastPathComponent().path ?? DataStore.defaultDirectory().path
+        let a = NSAlert()
+        a.alertStyle = .warning
+        a.messageText = "Your data file was damaged"
+        a.informativeText = "todo-target moved it aside as \(fileName) in \(folder) and started with empty data. "
+            + "Nothing was deleted. If you use backup, todo-target will not replace your backup without asking."
+        NSApp.activate(ignoringOtherApps: true)
+        a.runModal()
     }
 
     /// Opens (or raises) the Settings window.

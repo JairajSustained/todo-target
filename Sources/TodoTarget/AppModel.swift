@@ -10,6 +10,11 @@ final class AppModel: ObservableObject {
     @Published var heatmapPeriod: HeatmapPeriod = .current
     /// Set when the last save failed. Shown quietly; never an alert.
     @Published private(set) var saveError: String?
+    /// Name of the file `data.json` was moved to when it was damaged at start.
+    /// While set, local data is not trusted: it must never replace a backup unasked.
+    @Published private(set) var recoveredFile: String?
+    /// Full path of the moved-aside file (for the one-time alert).
+    let recoveredFileURL: URL?
 
     var onChange: (() -> Void)?
 
@@ -21,9 +26,17 @@ final class AppModel: ObservableObject {
         self.store = store
         self.calendar = calendar
         self.tracker = DayTracker(clock: clock, calendar: calendar)
-        self.data = store.load()
+        let report = store.loadReport()
+        self.data = report.data
+        self.recoveredFileURL = report.quarantinedFile
+        self.recoveredFile = report.quarantinedFile?.lastPathComponent
         self.today = tracker.today
     }
+
+    var recoveredFromDamage: Bool { recoveredFile != nil }
+
+    /// The user chose what to do about the damaged file (restore, or keep this Mac's data).
+    func clearRecoveryFlag() { recoveredFile = nil }
 
     var streak: StreakState { StreakEngine.evaluate(data: data, today: today, calendar: calendar) }
 

@@ -69,3 +69,20 @@ private func corruptFiles(in dir: URL) -> [URL] {
     defer { unsetenv("TODO_TARGET_DATA_DIR") }
     #expect(DataStore.defaultDirectory().path == "/tmp/tt-env-test")
 }
+
+@Test func loadReportNamesTheQuarantinedFile() throws {
+    let dir = tempDir()
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try Data("{not json".utf8).write(to: dir.appendingPathComponent("data.json"))
+    let report = DataStore(directory: dir, now: fixedNow).loadReport()
+    #expect(report.data.isPristine)
+    #expect(report.quarantinedFile?.lastPathComponent == "data.json.corrupt-1700000000")
+}
+
+@Test func loadReportHasNoQuarantinedFileForGoodOrMissingData() throws {
+    let dir = tempDir()
+    #expect(DataStore(directory: dir, now: fixedNow).loadReport().quarantinedFile == nil)
+    let store = DataStore(directory: dir, now: fixedNow)
+    try store.save(AppData.pristine())
+    #expect(store.loadReport().quarantinedFile == nil)
+}

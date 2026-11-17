@@ -23,16 +23,26 @@ public final class DataStore {
 
     private struct VersionProbe: Decodable { var schemaVersion: Int }
 
-    public func load() -> AppData {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return .pristine() }
+    /// The loaded data, and the file that was moved aside when the old one was damaged.
+    public struct LoadResult {
+        public var data: AppData
+        /// Non-nil when `data.json` was unreadable or invalid and was moved aside.
+        public var quarantinedFile: URL?
+    }
+
+    public func load() -> AppData { loadReport().data }
+
+    public func loadReport() -> LoadResult {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            return LoadResult(data: .pristine(), quarantinedFile: nil)
+        }
         guard let bytes = try? Data(contentsOf: fileURL),
               let probe = try? JSONDecoder().decode(VersionProbe.self, from: bytes),
               probe.schemaVersion <= 1,
               let data = try? JSONDecoder().decode(AppData.self, from: bytes) else {
-            quarantine()
-            return .pristine()
+            return LoadResult(data: .pristine(), quarantinedFile: quarantine())
         }
-        return data
+        return LoadResult(data: data, quarantinedFile: nil)
     }
 
     public func save(_ data: AppData) throws {
@@ -44,7 +54,7 @@ public final class DataStore {
     }
 
     /// Moves the bad file to `data.json.corrupt-<unix time>`. Never overwrites an earlier one.
-    private func quarantine() {
+    private func quarantine() -> URL? {
         let stamp = Int(now().timeIntervalSince1970)
         var target = directory.appendingPathComponent("data.json.corrupt-\(stamp)")
         var n = 1
@@ -52,6 +62,7 @@ public final class DataStore {
             target = directory.appendingPathComponent("data.json.corrupt-\(stamp)-\(n)")
             n += 1
         }
-        try? FileManager.default.moveItem(at: fileURL, to: target)
+        do { try FileManager.default.moveItem(at: fileURL, to: target) } catch { return nil }
+        return target
     }
 }
