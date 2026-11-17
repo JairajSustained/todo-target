@@ -14,8 +14,8 @@ final class BackupCoordinator: ObservableObject {
     private let tokens: TokenStore
     private let urlSession: URLSession
     private var debounce: Task<Void, Never>?
-    /// True once the first-sync check (pull, compare) passed in this session.
-    private var synced = false
+    /// Whether the first-sync check (pull, compare) passed for the current sign-in.
+    private var gate = SyncGate()
     /// A sign-in callback is accepted only after the user asked for a link (15 minutes).
     private var pendingSignIn = PendingSignIn()
 
@@ -59,7 +59,7 @@ final class BackupCoordinator: ObservableObject {
             // Before the settings change, so the change cannot trigger a backup with the old session.
             debounce?.cancel()
             tokens.clear()
-            synced = false
+            gate.reset()
             lastSyncedAt = nil
             pendingSignIn.cancel()
             status = ""
@@ -93,9 +93,9 @@ final class BackupCoordinator: ObservableObject {
     func backupNow(interactive: Bool = true) async {
         debounce?.cancel()
         guard let c = client() else { status = "Backup is not set up"; return }
-        guard c.isSignedIn else { signedIn = false; status = "Signed out"; return }
+        guard c.isSignedIn else { gate.signedOut(); signedIn = false; status = "Signed out"; return }
         do {
-            if !synced {
+            if !gate.mayUploadWithoutComparing {
                 // First upload of this session: pull first. Never overwrite a backup unasked.
                 let remote = try await c.pull()
                 let plan = BackupSync.plan(local: model.data, recoveredFromDamage: model.recoveredFromDamage,
@@ -105,7 +105,7 @@ final class BackupCoordinator: ObservableObject {
                     status = "Nothing to back up yet"
                     return
                 case .upload:
-                    synced = true
+                    gate.comparisonPassed()
                 case .offerRestore, .askWhichWins:
                     guard let remote else { return }
                     guard interactive else {
@@ -117,7 +117,7 @@ final class BackupCoordinator: ObservableObject {
                         applyRestore(remote)
                         return
                     case .useThisMac:
-                        synced = true
+                        gate.comparisonPassed()
                         model.clearRecoveryFlag()
                     case .notNow:
                         status = "Backup paused: nothing was changed"
@@ -131,6 +131,7 @@ final class BackupCoordinator: ObservableObject {
             lastSyncedAt = p.savedAt
             status = "Last backup: " + p.savedAt.formatted(date: .abbreviated, time: .shortened)
         } catch BackupError.notSignedIn {
+            gate.signedOut()
             signedIn = false; status = "Signed out"
         } catch {
             status = "Backup failed: \(Self.describe(error))"
@@ -176,7 +177,7 @@ final class BackupCoordinator: ObservableObject {
         model.replaceData(payload.appData(keeping: model.data.settings))
         model.clearRecoveryFlag()
         lastSyncedAt = payload.savedAt
-        synced = true
+        gate.comparisonPassed()
         status = "Restored the backup"
     }
 
@@ -201,6 +202,10 @@ final class BackupCoordinator: ObservableObject {
         guard let c = client() else { status = "Enter the Supabase URL and anon key first"; return }
         do {
             try c.completeSignIn(callback: url)
+            // A new sign-in must pull and compare again before any upload, and a queued
+            // backup from the earlier session must not run first.
+            debounce?.cancel()
+            gate.signedIn()
             signedIn = true
             status = "Signed in"
             Task { await backupNow() }
@@ -230,6 +235,7 @@ final class BackupCoordinator: ObservableObject {
             }
             applyRestore(payload)
         } catch BackupError.notSignedIn {
+            gate.signedOut()
             signedIn = false; status = "Signed out"
         } catch {
             status = "Restore failed: \(Self.describe(error))"
